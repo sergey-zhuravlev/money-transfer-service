@@ -27,10 +27,6 @@ public class Service {
         try (Connection conn = dataSource.getConnection()) {
             conn.setAutoCommit(false);
             try {
-                if (repository.isTransferAlreadyProcessed(conn, req.getImdepotenceId())) {
-                    return Response.error("Transfer with such imdepontence_id already processed");
-                }
-
                 OptionalLong srcAmmount, dstAmmount;
                 if (req.getSrc().compareTo(req.getDst()) < 0) {
                     srcAmmount = repository.getBalanceAndLock(conn, req.getSrc());
@@ -50,7 +46,13 @@ public class Service {
                     return Response.error("No enough funds on src account");
                 }
 
-                repository.makeTransfer(conn, req.getImdepotenceId(), req.getSrc(), req.getDst(), req.getAmmount());
+                if (!repository.tryInsertTransfer(conn,
+                        req.getImdepotenceId(), req.getSrc(), req.getDst(), req.getAmmount()))
+                {
+                    return Response.error("Transfer with such imdepontence_id already processed");
+                }
+
+                repository.makeTransfer(conn, req.getSrc(), req.getDst(), req.getAmmount());
                 conn.commit();
             } catch (SQLException e) {
                 conn.rollback();

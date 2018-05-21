@@ -35,7 +35,6 @@ public class MoneyTransferProperties {
 
     @Before
     public void setUp() throws Exception {
-        System.out.println("before");
         ctx = ContextBuilder.create();
         helper = new TestHelper(ctx);
         helper.clearAll();

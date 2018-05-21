@@ -26,36 +26,34 @@ public class Repository {
         }
     }
 
-    public boolean isTransferAlreadyProcessed(Connection conn, String imdepontenceId) throws SQLException {
-        try (PreparedStatement sth = conn
-                .prepareStatement("SELECT 1 FROM transfers WHERE imdepontence_id = ? FOR UPDATE"))
-        {
-            sth.setString(1, imdepontenceId);
-            sth.execute();
-            ResultSet resultSet = sth.getResultSet();
-            if (!resultSet.next()) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    public void makeTransfer(Connection conn, String imdepontenceId, String src, String dst, long ammount)
+    public boolean tryInsertTransfer(Connection conn, String imdepontenceId, String src, String dst, long ammount)
             throws SQLException
     {
         try (
-                PreparedStatement insert = conn.prepareStatement(
-                        "INSERT INTO transfers (imdepontence_id, src, dst, ammount) VALUES (?, ?, ?, ?)");
+                PreparedStatement sth = conn.prepareStatement(
+                        "INSERT INTO transfers (imdepontence_id, src, dst, ammount) "
+                                + "SELECT ?, ?, ?, ? "
+                                + "WHERE NOT EXISTS (SELECT 1 FROM transfers WHERE imdepontence_id = ?)");
+        )
+        {
+            sth.setString(1, imdepontenceId);
+            sth.setString(2, src);
+            sth.setString(3, dst);
+            sth.setLong(4, ammount);
+            sth.setString(5, imdepontenceId);
+            int insertedRows = sth.executeUpdate();
+            return insertedRows > 0;
+        }
+    }
+
+    public void makeTransfer(Connection conn, String src, String dst, long ammount)
+            throws SQLException
+    {
+        try (
                 PreparedStatement update = conn.prepareStatement(
                         "UPDATE accounts SET balance = balance + ? WHERE id = ?");
         )
         {
-            insert.setString(1, imdepontenceId);
-            insert.setString(2, src);
-            insert.setString(3, dst);
-            insert.setLong(4, ammount);
-            insert.execute();
-
             update.setLong(1, -ammount);
             update.setString(2, src);
             update.execute();
