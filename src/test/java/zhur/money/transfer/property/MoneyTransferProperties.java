@@ -6,9 +6,9 @@ import java.sql.ResultSet;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 import com.pholser.junit.quickcheck.From;
 import com.pholser.junit.quickcheck.Property;
@@ -51,20 +51,24 @@ public class MoneyTransferProperties {
     ) throws Exception
     {
         ExecutorService executorService = Executors.newFixedThreadPool(concurrency);
-        List<Future<?>> futures = new ArrayList<>();
+
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch finishLatch = new CountDownLatch(transfers.size());
         try {
             for (PropertyRequest req : transfers) {
-                futures.add(executorService.submit(() -> {
+                executorService.submit(() -> {
                     try {
+                        startLatch.await();
                         ctx.service().transfer(createReq(req));
                     } catch (Exception e) {
                         throw new RuntimeException(e);
+                    } finally {
+                        finishLatch.countDown();
                     }
-                }));
+                });
             }
-            for (Future<?> future : futures) {
-                future.get();
-            }
+            startLatch.countDown();
+            finishLatch.await();
         } finally {
             executorService.shutdown();
         }
